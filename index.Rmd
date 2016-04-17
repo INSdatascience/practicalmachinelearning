@@ -1,0 +1,51 @@
+---
+title: "Prediction Assignment"
+author: "Michael Wu"
+date: "April 10, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Prediction of quality of execution of a bicep curl
+
+From <http://groupware.les.inf.puc-rio.br/har> :
+
+> Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).
+
+We will see if we can create a prediction model that would allow us to predict the execution type (A through E) using the information taken from the various accelerometers.
+
+```{r}
+library(dplyr); library(caret); library(parallel); library(doParallel); library(randomForest); library(e1071)
+cluster <- makeCluster(detectCores() -1); registerDoParallel(cluster)
+ctrl <- trainControl(method="cv", number=5, allowParallel = T)
+d <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+d <- select(d, -(c(1:7, 12:36, 50:59, 69:83, 87:101, 103:112, 125:139, 141:150)))
+set.seed(9801)
+inTrain <- createDataPartition(y=d$classe, p=0.6, list=F)
+training <- d[inTrain,]
+testing <- d[-inTrain,]
+modelFitRF <- train(classe ~ ., data=training, method="rf", trControl=ctrl)
+stopCluster(cluster)
+```
+
+Of the 160 columns of information, only 53 are kept. The others had very sparse data (with most cells either being empty, or NA), making them poor candidates for prediction.
+
+Random Forests are very accurate, making them a perfect choice to start with. Random Forests are also prone to over-fitting, so it is important that we use cross-validation. In this case, we will be using a 5-fold cross-validation technique.
+
+Let's take a look at the results.
+
+```{r}
+modelFitRF
+```
+
+With this model, we were able to reach a 99% accuracy. Let's double check with our testing data.
+
+```{r}
+confusionMatrix(testing$classe, predict(modelFitRF, testing))
+```
+
+We again achieve a 99% accuracy. Our out of sample error seems very reasonable.
